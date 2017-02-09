@@ -17,15 +17,6 @@ u8 curent_search_bandwidth = 10;
 u8 space_per_step = 5;
 
 
-extern int coutn_for_receive_1;
-extern int coutn_for_receive_2;
-extern int coutn_for_receive_3;
-extern int coutn_for_receive_4;
-extern int coutn_for_receive_5;
-extern int coutn_for_receive_6;
-extern int coutn_for_receive_7;
-
-
 void NRF24L01_Init(void){
 
 	GPIO_InitTypeDef GPIO_InitStructure;
@@ -108,7 +99,7 @@ int search_node(int bandwidth ){
 	}
 	for(;curent_search_bandwidth <= bandwidth;){
 		recv_AN_flag = 0;	
-#ifdef TEST_VERSION
+#ifdef TEST_NRF24L01
 		sprintf(ret_words,"search frequency %d MHz\r\n",curent_search_bandwidth);
 		Uart1_SendString((u8*)ret_words);
 #endif
@@ -131,13 +122,13 @@ u8 search_extra_node(void){
 	recv_AN_flag = 0;	
 	curent_search_bandwidth = ADD_EXTRA_FREQUENCY;
 	sprintf(ad_node_words,"AN%02d",node_num);
-#ifdef TEST_VERSION
+#ifdef TEST_NRF24L01
 	Uart1_SendString((u8*)ret_words);
 #endif
 	Wireless_Send_Data((u8*)ad_node_words);
 	delay_ms(10);
 	if(recv_AN_flag == 0){                       //当没有接收到节点返回组网字段时，再次发送；
-#ifdef TEST_VERSION
+#ifdef TEST_NRF24L01
 	Uart1_SendString((u8*)ret_words);
 #endif
 	Wireless_Send_Data((u8*)ad_node_words);
@@ -151,13 +142,9 @@ u8 search_extra_node(void){
 	 
 	 u8 RX_Status;
 	 u8 recev_node_num = 0;
-//	 delay_us(100);
 	 if(EXTI_GetITStatus(EXTI_Line1) != RESET){
 		 Clr_NRF24L01_CE;
-		 RX_Status=NRF24L01_RxPacket(rev_buf);
-		 if(RX_Status == 0){
-			rev_buf[27] = '\0';
-			Uart1_SendString(rev_buf);
+		 if(NRF24L01_RxPacket(rev_buf) == 0){
 			if('A' == rev_buf[0] && 'N' == rev_buf[1]){
 				recev_node_num = (rev_buf[2] - '0') * 10 + rev_buf[3] - '0';
 				if(recev_node_num == node_num){                                    //发送和接收的节点编号相同，编号加1；
@@ -168,67 +155,21 @@ u8 search_extra_node(void){
 					Uart1_SendString((u8*)ret_words);
 					ret_words[0] = 0;
 				}
-			}else{
-				int node_num = (rev_buf[0] - '0') * 10 + rev_buf[1] - '0';
-//				#ifdef TEST_VERSION
-//				sprintf(ret_words,"receive: %02d\r\n",node_num);
-//				Uart1_SendString((u8*)ret_words);
-//				ret_words[0] = 0;
-//				#endif
-				switch (node_num){
-					case 1:
-						coutn_for_receive_1++;
-						break;
-					case 2:
-						coutn_for_receive_2++;
-						break;
-					case 3:
-						coutn_for_receive_3++;
-						break;
-					case 4:
-						coutn_for_receive_4++;
-						break;
-					case 5:
-						coutn_for_receive_5++;
-						break;
-					case 6:
-						coutn_for_receive_6++;
-						break;
-					case 7:
-						coutn_for_receive_7++;
-						break;
-					default:
-						break;
-				}
-
-				}
-			}else{
+			}else if('D' == rev_buf[0] && 'T' == rev_buf[1]){
+				#ifdef TEST_MPU
+				MPU9250_send_data(*((short *)(rev_buf+8)),*((short *)(rev_buf+10)),*((short *)(rev_buf+12))
+					,*((short *)(rev_buf+14)),*((short *)(rev_buf+16)),*((short *)(rev_buf+18))
+						,*((short *)(rev_buf+20)),*((short *)(rev_buf+22)),*((short *)(rev_buf+24)));
+				#endif
+			}
+		}else{
 				
 
-			}
-		 }
-		Set_NRF24L01_CE; 
-		EXTI_ClearITPendingBit(EXTI_Line1);
-	 }
-	 
-	 
- 
-
-//void set_frequency(int frequency){
-//	Clr_NRF24L01_CE;	  
-////	NRF24L01_Write_Buf(SPI_WRITE_REG+RX_ADDR_P0,(u8*)RX_ADDRESS,RX_ADR_WIDTH);//写RX节点地址
-////	NRF24L01_Write_Buf(SPI_WRITE_REG+TX_ADDR,(u8*)TX_ADDRESS,TX_ADR_WIDTH);    //写TX节点地址 
-//		
-////	NRF24L01_Write_Reg(SPI_WRITE_REG+EN_AA,0x00);    //使能通道0的自动应答    
-////	NRF24L01_Write_Reg(SPI_WRITE_REG+EN_RXADDR,0x01);//使能通道0的接收地址  	 
-//	NRF24L01_Write_Reg(SPI_WRITE_REG+RF_CH,frequency);	     //设置RF通信频率		  
-////	NRF24L01_Write_Reg(SPI_WRITE_REG+RX_PW_P0,RX_PLOAD_WIDTH);//选择通道0的有效数据宽度 	    
-////	NRF24L01_Write_Reg(SPI_WRITE_REG+RF_SETUP,0x0f); //设置TX发射参数,0db增益,2Mbps,低噪声增益开启   
-////	NRF24L01_Write_Reg(SPI_WRITE_REG+CONFIG1, 0x3f);  //配置基本工作模式的参数;PWR_UP,EN_CRC,16BIT_CRC,接收模式 
-//	Set_NRF24L01_CE;
-//	
-//	return;
-//}
+		}
+	}
+	Set_NRF24L01_CE; 
+	EXTI_ClearITPendingBit(EXTI_Line1);
+}
 
 
 u8  Wireless_Send_Data(u8 *txbuf){
@@ -244,14 +185,7 @@ u8  Wireless_Send_Data(u8 *txbuf){
 
 
 void RX_Mode(void)
-{
-//	Clr_NRF24L01_CE;
-//	NRF24L01_Write_Buf(SPI_WRITE_REG+RX_ADDR_P0,(u8*)RX_ADDRESS,RX_ADR_WIDTH);//写RX节点地址
-//	NRF24L01_Write_Buf(SPI_WRITE_REG+TX_ADDR,(u8*)TX_ADDRESS,TX_ADR_WIDTH);    //写TX节点地址 
-//	NRF24L01_Write_Reg(SPI_WRITE_REG+RF_CH,100);	     //设置RF通信频率		  	
-//  	NRF24L01_Write_Reg(SPI_WRITE_REG+CONFIG1, 0x3f);  //配置基本工作模式的参数;PWR_UP,EN_CRC,16BIT_CRC,接收模式 
-//  	Set_NRF24L01_CE;
-	
+{	
 	Clr_NRF24L01_CE;	  
   	NRF24L01_Write_Buf(SPI_WRITE_REG+RX_ADDR_P0,(u8*)RX_ADDRESS,RX_ADR_WIDTH);//写RX节点地址
 	NRF24L01_Write_Buf(SPI_WRITE_REG+TX_ADDR,(u8*)TX_ADDRESS,TX_ADR_WIDTH);    //写TX节点地址 
@@ -267,13 +201,6 @@ void RX_Mode(void)
 
 void TX_Mode(void)
 {
-//	Clr_NRF24L01_CE;
-//	NRF24L01_Write_Buf(SPI_WRITE_REG+RX_ADDR_P0,(u8*)RX_ADDRESS,RX_ADR_WIDTH);//写RX节点地址
-//	NRF24L01_Write_Buf(SPI_WRITE_REG+TX_ADDR,(u8*)TX_ADDRESS,TX_ADR_WIDTH);    //写TX节点地址 	
-////	NRF24L01_Write_Reg(SPI_WRITE_REG+RF_CH,125);       //设置RF通道为40,AD转换测试，暂时设置为40    
-//  	NRF24L01_Write_Reg(SPI_WRITE_REG+CONFIG1, 0x3e);  //配置基本工作模式的参数;PWR_UP,EN_CRC,16BIT_CRC,发送模式 
-//  	Set_NRF24L01_CE;
-	
 	Clr_NRF24L01_CE;	    
   	NRF24L01_Write_Buf(SPI_WRITE_REG+TX_ADDR,(u8*)TX_ADDRESS,TX_ADR_WIDTH);    //写TX节点地址 
   	NRF24L01_Write_Buf(SPI_WRITE_REG+RX_ADDR_P0,(u8*)RX_ADDRESS,RX_ADR_WIDTH); //设置TX节点地址,主要为了使能ACK	  
@@ -401,6 +328,8 @@ u8 NRF24L01_Check(void)
 		 
 	return 0;		                                //NRF24L01在位
 }
+
+	
 
 
 

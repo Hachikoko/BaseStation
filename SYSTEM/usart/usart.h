@@ -41,7 +41,9 @@
 void Uart1_init(u32 bound);
 void Uart1_SendString(u8 *str);
 
-
+void usart1_send_char(u8 c);
+void usart1_niming_report(u8 fun,u8*data,u8 len);
+void MPU9250_send_data(short aacx,short aacy,short aacz,short gyrox,short gyroy,short gyroz,short meox,short meoy,short meoz);
 
 #endif
 
