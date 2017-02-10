@@ -8,7 +8,7 @@
 //地址
 const u8 TX_ADDRESS[TX_ADR_WIDTH]={0x34,0x43,0x10,0x10,0x00}; //发送地址
 const u8 RX_ADDRESS[RX_ADR_WIDTH]={0x34,0x43,0x10,0x10,0x01}; //接收地址	
-u8 rev_buf[28];
+u8 rev_buf[30];
 
 extern char ret_words[100];
 extern u8 node_num;
@@ -146,6 +146,9 @@ u8 search_extra_node(void){
 		 Clr_NRF24L01_CE;
 		 if(NRF24L01_RxPacket(rev_buf) == 0){
 			if('A' == rev_buf[0] && 'N' == rev_buf[1]){
+				rev_buf[4] = '\r';
+				rev_buf[5] = '\n';
+				Uart1_SendString((u8*)rev_buf);
 				recev_node_num = (rev_buf[2] - '0') * 10 + rev_buf[3] - '0';
 				if(recev_node_num == node_num){                                    //发送和接收的节点编号相同，编号加1；
 					node_num++;
@@ -156,10 +159,18 @@ u8 search_extra_node(void){
 					ret_words[0] = 0;
 				}
 			}else if('D' == rev_buf[0] && 'T' == rev_buf[1]){
-				#ifdef TEST_MPU
+				rev_buf[27] = '\r';
+				rev_buf[28] = '\n';
+				rev_buf[29] = '\0';
+				#ifdef TEST_MPU_NIMING
 				MPU9250_send_data(*((short *)(rev_buf+8)),*((short *)(rev_buf+10)),*((short *)(rev_buf+12))
 					,*((short *)(rev_buf+14)),*((short *)(rev_buf+16)),*((short *)(rev_buf+18))
 						,*((short *)(rev_buf+20)),*((short *)(rev_buf+22)),*((short *)(rev_buf+24)));
+				#endif
+				#ifdef TEST_MPU_FOR_UP
+				for(int i = 0; i < 29; i++){
+					usart1_send_char(rev_buf[i]);
+				}
 				#endif
 			}
 		}else{
