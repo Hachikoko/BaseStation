@@ -365,7 +365,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F40_41xxx,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\CORE;..\SYSTEM\delay;..\SYSTEM\sys;..\SYSTEM\usart;..\USER;..\FWLIB\inc;..\SYSTEM\SPI;..\SYSTEM\NRF24L01;..\SYSTEM\Timer;..\USER</IncludePath>
+              <IncludePath>..\CORE;..\SYSTEM\delay;..\SYSTEM\sys;..\SYSTEM\usart;..\USER;..\FWLIB\inc;..\SYSTEM\SPI;..\SYSTEM\NRF24L01;..\SYSTEM\Timer;..\USER;..\SYSTEM\ComplementaryFiltering;..\SYSTEM\Kalman\codegen;..\SYSTEM\Kalman</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -647,6 +647,11 @@
               <FileName>Timer.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\SYSTEM\Timer\Timer.c</FilePath>
+            </File>
+            <File>
+              <FileName>Complementary.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\SYSTEM\ComplementaryFiltering\Complementary.c</FilePath>
             </File>
           </Files>
         </Group>

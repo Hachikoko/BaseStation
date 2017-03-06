@@ -3,6 +3,7 @@
 
 #include "stm32f4xx.h"
 #include "usart.h"
+#include "Complementary.h"
 
 //NRF24L01寄存器操作命令
 #define SPI_READ_REG    0x00  //读配置寄存器,低5位为寄存器地址
@@ -89,6 +90,9 @@ u8 NRF24L01_Check(void);                                 //检查NRF24L01是否在位
 //组网相关函数
 int search_node(int bandwidth );
 u8 search_extra_node(void);
+
+//
+void MPU9250_raw_to_flot(MPU9250_DATD * mpu_data,MPU9250_RAW_DATD* mpu_raw_data);
 
 
 

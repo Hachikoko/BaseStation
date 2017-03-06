@@ -1,8 +1,10 @@
 #include "sys.h"
 #include "usart.h"	
 
+
 extern u8 add_extra_node_set_flag;
 extern u8 add_extra_node_single_flag;
+
 
 
 void Uart1_init(u32 bound){                               //串口1初始化
@@ -129,6 +131,47 @@ void MPU9250_send_data(short aacx,short aacy,short aacz,short gyrox,short gyroy,
 	usart1_niming_report(0XA1,tbuf,18);//自定义帧,0XA1
 }
 
+//通过串口1上报结算后的姿态数据给电脑
+//aacx,aacy,aacz:x,y,z三个方向上面的加速度值
+//gyrox,gyroy,gyroz:x,y,z三个方向上面的陀螺仪值
+//roll:横滚角.单位0.01度。 -18000 -> 18000 对应 -180.00  ->  180.00度
+//pitch:俯仰角.单位 0.01度。-9000 - 9000 对应 -90.00 -> 90.00 度
+//yaw:航向角.单位为0.1度 0 -> 3600  对应 0 -> 360.0度
+void MPU9250_report_imu(MPU9250_RAW_DATD*mup_raw_data,Fliter_Result_Data*result_data)
+{
+	u8 tbuf[24]; 
+	u8 i;
+	short roll,pitch,yaw;
+	roll = (short)(result_data->euler[0] * 100);
+	pitch = (short)(result_data->euler[1] * 100);
+	yaw = (short)result_data->euler[2] * 10;
+	for(i=0;i<28;i++)tbuf[i]=0;//清0
+	tbuf[0]=((mup_raw_data->ax)>>8)&0XFF;
+	tbuf[1]=(mup_raw_data->ax)&0XFF;
+	tbuf[2]=((mup_raw_data->ay)>>8)&0XFF;
+	tbuf[3]=(mup_raw_data->ay)&0XFF;
+	tbuf[4]=((mup_raw_data->az)>>8)&0XFF;
+	tbuf[5]=(mup_raw_data->az)&0XFF; 
+	tbuf[6]=((mup_raw_data->gx)>>8)&0XFF;
+	tbuf[7]=(mup_raw_data->gx)&0XFF;
+	tbuf[8]=((mup_raw_data->gy)>>8)&0XFF;
+	tbuf[9]=(mup_raw_data->gy)&0XFF;
+	tbuf[10]=((mup_raw_data->gz)>>8)&0XFF;
+	tbuf[11]=(mup_raw_data->gz)&0XFF;	
+	tbuf[12]=((mup_raw_data->mx)>>8)&0XFF;
+	tbuf[13]=(mup_raw_data->mx)&0XFF;
+	tbuf[14]=((mup_raw_data->my)>>8)&0XFF;
+	tbuf[15]=(mup_raw_data->my)&0XFF;
+	tbuf[16]=((mup_raw_data->mz)>>8)&0XFF;
+	tbuf[17]=(mup_raw_data->mz)&0XFF;
+	tbuf[18]=(roll>>8)&0XFF;
+	tbuf[19]=roll&0XFF;
+	tbuf[20]=(pitch>>8)&0XFF;
+	tbuf[21]=pitch&0XFF;
+	tbuf[22]=(yaw>>8)&0XFF;
+	tbuf[23]=yaw&0XFF;
+	usart1_niming_report(0XAF,tbuf,24);//飞控显示帧,0XAF
+} 
 
 
 

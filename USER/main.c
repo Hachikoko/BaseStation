@@ -17,6 +17,7 @@ u8 add_extra_node_single_flag = 0;
 u8 add_extra_nodes_flag = 0;
 int show_node_nums_count = 0;
 
+
 int count_for_send = 1;
 int coutn_for_receive_1 = 0;
 int coutn_for_receive_2 = 0;
@@ -61,13 +62,13 @@ int main(void)
 			TIM_Cmd(TIM7,ENABLE);
 			add_extra_nodes_flag = 0;
 		}
-		if(show_node_nums_count%900 == 0){	
-			sprintf(ret_words,"current node nums is %d....\r\n",node_num-1);
-			Uart1_SendString((u8*)ret_words);
-			ret_words[0] = 0;
-			show_node_nums_count = 1;
-				
-		}
+//		if(show_node_nums_count%900 == 0){	
+//			sprintf(ret_words,"current node nums is %d....\r\n",node_num-1);
+//			Uart1_SendString((u8*)ret_words);
+//			ret_words[0] = 0;
+//			show_node_nums_count = 1;
+//				
+//		}
 			
 	}
 }

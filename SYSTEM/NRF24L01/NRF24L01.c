@@ -4,6 +4,9 @@
 #include "delay.h"
 #include "main.h"
 #include "Timer.h"
+#include "Complementary.h"
+#include "string.h"
+
 
 //地址
 const u8 TX_ADDRESS[TX_ADR_WIDTH]={0x34,0x43,0x10,0x10,0x00}; //发送地址
@@ -13,8 +16,15 @@ u8 rev_buf[30];
 extern char ret_words[100];
 extern u8 node_num;
 extern u8 recv_AN_flag;
+extern void kalman_filter_main(float dt,MPU9250_RAW_DATD* raw_data,Fliter_Result_Data*);
 u8 curent_search_bandwidth = 10;
 u8 space_per_step = 5;
+MPU9250_DATD mpu9250_data;
+MPU9250_RAW_DATD mup9250_raw_data;
+float dt = 0.009;
+static Fliter_Data fliter_data;
+//kalman
+float euler[3];       	//欧拉角
 
 
 void NRF24L01_Init(void){
@@ -85,7 +95,9 @@ void NRF24L01_Init(void){
   	NRF24L01_Write_Reg(SPI_WRITE_REG+RF_SETUP,0x0f); //设置TX发射参数,0db增益,2Mbps,低噪声增益开启   
   	NRF24L01_Write_Reg(SPI_WRITE_REG+CONFIG1, 0x3f);  //配置基本工作模式的参数;PWR_UP,EN_CRC,16BIT_CRC,接收模式 
 	
-	Set_NRF24L01_CE;                                  
+	Set_NRF24L01_CE;    
+	
+	complementary_data_init(&fliter_data);
 	
 	return;
 }
@@ -142,6 +154,7 @@ u8 search_extra_node(void){
 	 
 	 u8 RX_Status;
 	 u8 recev_node_num = 0;
+	 Fliter_Result_Data fliter_result_data;
 	 if(EXTI_GetITStatus(EXTI_Line1) != RESET){
 		 Clr_NRF24L01_CE;
 		 if(NRF24L01_RxPacket(rev_buf) == 0){
@@ -156,16 +169,52 @@ u8 search_extra_node(void){
 				}else{
 					sprintf(ret_words,"节点返回编号%d,基站保存编号%d",recev_node_num,node_num);
 					Uart1_SendString((u8*)ret_words);
-					ret_words[0] = 0;
 				}
 			}else if('D' == rev_buf[0] && 'T' == rev_buf[1]){
 				rev_buf[27] = '\r';
 				rev_buf[28] = '\n';
 				rev_buf[29] = '\0';
+				
+				mup9250_raw_data.ax = *((short *)(rev_buf+8));
+				mup9250_raw_data.ay = *((short *)(rev_buf+10));
+				mup9250_raw_data.az = *((short *)(rev_buf+12));
+				mup9250_raw_data.gx = *((short *)(rev_buf+14));
+				mup9250_raw_data.gy = *((short *)(rev_buf+16));
+				mup9250_raw_data.gz = *((short *)(rev_buf+18));
+				mup9250_raw_data.mx = *((short *)(rev_buf+20));
+				mup9250_raw_data.my	= *((short *)(rev_buf+22));
+				mup9250_raw_data.mz = *((short *)(rev_buf+24));
+
+				MPU9250_raw_to_flot(&mpu9250_data,&mup9250_raw_data);
+
+				#ifdef TEST_MPU9250
+				sprintf(ret_words,"ax : %f, ay : %f, az : %f, gx : %f, gy : %f, gz : %f, mx : %f, my : %f, mz : %f\r\n",mpu9250_data.ax,mpu9250_data.ay,mpu9250_data.az
+				,mpu9250_data.gx,mpu9250_data.gy,mpu9250_data.gz,mpu9250_data.mx,mpu9250_data.my,mpu9250_data.mz);
+				Uart1_SendString((u8*)ret_words);
+				#endif
+				complementary_task(&fliter_data,&fliter_result_data,&mpu9250_data,dt);
+//				kalman_filter_main(dt,&mup9250_raw_data,&fliter_result_data);
 				#ifdef TEST_MPU_NIMING
-				MPU9250_send_data(*((short *)(rev_buf+8)),*((short *)(rev_buf+10)),*((short *)(rev_buf+12))
-					,*((short *)(rev_buf+14)),*((short *)(rev_buf+16)),*((short *)(rev_buf+18))
-						,*((short *)(rev_buf+20)),*((short *)(rev_buf+22)),*((short *)(rev_buf+24)));
+//				MPU9250_send_data(*((short *)(rev_buf+8)),*((short *)(rev_buf+10)),*((short *)(rev_buf+12))
+//					,*((short *)(rev_buf+14)),*((short *)(rev_buf+16)),*((short *)(rev_buf+18))
+//						,*((short *)(rev_buf+20)),*((short *)(rev_buf+22)),*((short *)(rev_buf+24)));
+//				MPU9250_report_imu(&mup9250_raw_data,&fliter_result_data);
+				sprintf(ret_words,"%f,%f,%f,%f\r\n",fliter_result_data.q[0],fliter_result_data.q[1],fliter_result_data.q[2],fliter_result_data.q[3]);
+				Uart1_SendString((u8*)ret_words);
+//				sprintf(ret_words,"roll : %f, pitch : %f, yaw : %f\r\n",fliter_result_data.euler[0],fliter_result_data.euler[1],fliter_result_data.euler[2]);
+//				Uart1_SendString((u8*)ret_words);
+//				memset(ret_words,0,200);
+//				ret_words[0] = 'B';
+//				*((float*)ret_words + 1) = fliter_result_data.q[0];
+//				*((float*)ret_words + 5) = fliter_result_data.q[1];
+//				*((float*)ret_words + 9) = fliter_result_data.q[2];
+//				*((float*)ret_words + 13) = fliter_result_data.q[3];
+//				ret_words[17] = '@';
+//				
+//				for(int i = 0; i < 18; i++){
+//					usart1_send_char(ret_words[i]);
+//				}
+				
 				#endif
 				#ifdef TEST_MPU_FOR_UP
 				for(int i = 0; i < 29; i++){
@@ -340,7 +389,31 @@ u8 NRF24L01_Check(void)
 	return 0;		                                //NRF24L01在位
 }
 
+void MPU9250_raw_to_flot(MPU9250_DATD * mpu_data,MPU9250_RAW_DATD* mpu_raw_data){
+	u8 ret = 0;
 	
+	int temp_data;
+	int full_data = 32760;
+
+	temp_data = mpu_raw_data->ax;
+	mpu_data->ax = (((float)temp_data)/((float)full_data)) * 4.0;
+	temp_data = mpu_raw_data->ay;
+	mpu_data->ay = (((float)temp_data)/((float)full_data)) * 4.0;
+	temp_data = mpu_raw_data->az;
+	mpu_data->az = (((float)temp_data)/((float)full_data)) * 4.0;
+	
+	temp_data = mpu_raw_data->gx;
+	mpu_data->gx = (((float)temp_data)/((float)full_data)) * 8.7266465;
+	temp_data = mpu_raw_data->gy;
+	mpu_data->gy = (((float)temp_data)/((float)full_data)) * 8.7266465;
+	temp_data = mpu_raw_data->gz;
+	mpu_data->gz = (((float)temp_data)/((float)full_data)) * 8.7266465;
+	
+	mpu_data->mx = (mpu_raw_data->mx * 0.15) * 0.01;		//转换以高斯为单位
+	mpu_data->my = (mpu_raw_data->my * 0.15) * 0.01;
+	mpu_data->mz = (mpu_raw_data->mz * 0.15) * 0.01;
+	
+}
 
 
 
