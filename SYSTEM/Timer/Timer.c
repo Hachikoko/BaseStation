@@ -16,6 +16,9 @@ extern u8 add_extra_node_single_flag;
 extern int count_for_send;
 extern int record_for_extra_node;
 
+u8 buf[6];
+static unsigned int absolute_frame_num = 0;
+
 void Timer7_init(void){
 	
 	TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStruct;
@@ -26,7 +29,7 @@ void Timer7_init(void){
 	
 	TIM_TimeBaseInitStruct.TIM_ClockDivision =  TIM_CKD_DIV1;
 	TIM_TimeBaseInitStruct.TIM_CounterMode = TIM_CounterMode_Up;
-	TIM_TimeBaseInitStruct.TIM_Period = 30*(node_num+1);
+	TIM_TimeBaseInitStruct.TIM_Period = 40*(node_num+1);
 	TIM_TimeBaseInitStruct.TIM_Prescaler = 8399;
 	TIM_TimeBaseInit(TIM7,&TIM_TimeBaseInitStruct);          //计数器初始化
 	
@@ -42,13 +45,16 @@ void Timer7_init(void){
 }
 
 void TIM7_IRQHandler(void){
-	u8 buf[5] = {'S','T','A','R',0};
+
 	u8 ret = 0;
+	buf[0] = 'S';
+	buf[1] = 'T';
 	if(TIM_GetITStatus(TIM7,TIM_IT_Update)==SET) //溢出中断
 	{
-		add_extra_nodes_count++;
-		show_node_nums_count++;
-		
+//		add_extra_nodes_count++;
+//		show_node_nums_count++;
+		absolute_frame_num++;
+		(*((unsigned int *)(buf+2))) = absolute_frame_num;
 		if(TX_OK==Wireless_Send_Data(buf)){
 			count_for_send++;
 		}else {

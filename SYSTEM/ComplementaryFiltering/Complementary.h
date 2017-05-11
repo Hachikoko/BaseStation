@@ -5,8 +5,8 @@
 #include "stdbool.h"
 #include "sys.h"
 
-#define Kp 10.0f
-#define Ki 0.01f
+#define Kp 100.0f
+#define Ki 0.008f
 
 
 

@@ -4,27 +4,39 @@
 #include "delay.h"
 #include "main.h"
 #include "Timer.h"
-#include "Complementary.h"
 #include "string.h"
 
+typedef struct{
+	short acc_x;
+	short acc_y;
+	short acc_z;
+	
+	short gyr_x;
+	short gyr_y;
+	short gyr_z;
+	
+	short mag_x;
+	short mag_y;
+	short mag_z;
+	
+	short q0;
+	short q1;
+	short q2;
+	short q3;
+}FRAME_DATA;
 
 //地址
 const u8 TX_ADDRESS[TX_ADR_WIDTH]={0x34,0x43,0x10,0x10,0x00}; //发送地址
 const u8 RX_ADDRESS[RX_ADR_WIDTH]={0x34,0x43,0x10,0x10,0x01}; //接收地址	
-u8 rev_buf[30];
+u8 rev_buf[32];
+//u8 recev_node_num_for_end_node[7];
 
 extern char ret_words[100];
 extern u8 node_num;
 extern u8 recv_AN_flag;
-extern void kalman_filter_main(float dt,MPU9250_RAW_DATD* raw_data,Fliter_Result_Data*);
 u8 curent_search_bandwidth = 10;
-u8 space_per_step = 5;
-MPU9250_DATD mpu9250_data;
-MPU9250_RAW_DATD mup9250_raw_data;
-float dt = 0.009;
-static Fliter_Data fliter_data;
-//kalman
-float euler[3];       	//欧拉角
+u8 space_per_step = 5;  //频率扫描间隔
+static FRAME_DATA temp_frame_data;
 
 
 void NRF24L01_Init(void){
@@ -96,9 +108,6 @@ void NRF24L01_Init(void){
   	NRF24L01_Write_Reg(SPI_WRITE_REG+CONFIG1, 0x3f);  //配置基本工作模式的参数;PWR_UP,EN_CRC,16BIT_CRC,接收模式 
 	
 	Set_NRF24L01_CE;    
-	
-	complementary_data_init(&fliter_data);
-	
 	return;
 }
 
@@ -153,74 +162,82 @@ u8 search_extra_node(void){
  void EXTI1_IRQHandler(void){
 	 
 	 u8 RX_Status;
-	 u8 recev_node_num = 0;
+	 int recev_node_num,recev_adsolute_node_num;
+	 
 	 Fliter_Result_Data fliter_result_data;
 	 if(EXTI_GetITStatus(EXTI_Line1) != RESET){
 		 Clr_NRF24L01_CE;
 		 if(NRF24L01_RxPacket(rev_buf) == 0){
 			if('A' == rev_buf[0] && 'N' == rev_buf[1]){
-				rev_buf[4] = '\r';
-				rev_buf[5] = '\n';
+				rev_buf[6] = '\r';
+				rev_buf[7] = '\n';
 				Uart1_SendString((u8*)rev_buf);
 				recev_node_num = (rev_buf[2] - '0') * 10 + rev_buf[3] - '0';
 				if(recev_node_num == node_num){                                    //发送和接收的节点编号相同，编号加1；
 					node_num++;
 					recv_AN_flag = 1;
+					recev_adsolute_node_num = (rev_buf[4] - '0') * 10 + rev_buf[5] - '0';
+//					recev_node_num_for_end_node[recev_adsolute_node_num] = recev_node_num;
 				}else{
 					sprintf(ret_words,"节点返回编号%d,基站保存编号%d",recev_node_num,node_num);
 					Uart1_SendString((u8*)ret_words);
 				}
-			}else if('D' == rev_buf[0] && 'T' == rev_buf[1]){
-				rev_buf[27] = '\r';
-				rev_buf[28] = '\n';
-				rev_buf[29] = '\0';
-				
-				mup9250_raw_data.ax = *((short *)(rev_buf+8));
-				mup9250_raw_data.ay = *((short *)(rev_buf+10));
-				mup9250_raw_data.az = *((short *)(rev_buf+12));
-				mup9250_raw_data.gx = *((short *)(rev_buf+14));
-				mup9250_raw_data.gy = *((short *)(rev_buf+16));
-				mup9250_raw_data.gz = *((short *)(rev_buf+18));
-				mup9250_raw_data.mx = *((short *)(rev_buf+20));
-				mup9250_raw_data.my	= *((short *)(rev_buf+22));
-				mup9250_raw_data.mz = *((short *)(rev_buf+24));
-
-				MPU9250_raw_to_flot(&mpu9250_data,&mup9250_raw_data);
-
-				#ifdef TEST_MPU9250
-				sprintf(ret_words,"ax : %f, ay : %f, az : %f, gx : %f, gy : %f, gz : %f, mx : %f, my : %f, mz : %f\r\n",mpu9250_data.ax,mpu9250_data.ay,mpu9250_data.az
-				,mpu9250_data.gx,mpu9250_data.gy,mpu9250_data.gz,mpu9250_data.mx,mpu9250_data.my,mpu9250_data.mz);
-				Uart1_SendString((u8*)ret_words);
-				#endif
-				complementary_task(&fliter_data,&fliter_result_data,&mpu9250_data,dt);
-//				kalman_filter_main(dt,&mup9250_raw_data,&fliter_result_data);
-				#ifdef TEST_MPU_NIMING
-//				MPU9250_send_data(*((short *)(rev_buf+8)),*((short *)(rev_buf+10)),*((short *)(rev_buf+12))
-//					,*((short *)(rev_buf+14)),*((short *)(rev_buf+16)),*((short *)(rev_buf+18))
-//						,*((short *)(rev_buf+20)),*((short *)(rev_buf+22)),*((short *)(rev_buf+24)));
-//				MPU9250_report_imu(&mup9250_raw_data,&fliter_result_data);
-				sprintf(ret_words,"%f,%f,%f,%f\r\n",fliter_result_data.q[0],fliter_result_data.q[1],fliter_result_data.q[2],fliter_result_data.q[3]);
-				Uart1_SendString((u8*)ret_words);
-//				sprintf(ret_words,"roll : %f, pitch : %f, yaw : %f\r\n",fliter_result_data.euler[0],fliter_result_data.euler[1],fliter_result_data.euler[2]);
-//				Uart1_SendString((u8*)ret_words);
-//				memset(ret_words,0,200);
-//				ret_words[0] = 'B';
-//				*((float*)ret_words + 1) = fliter_result_data.q[0];
-//				*((float*)ret_words + 5) = fliter_result_data.q[1];
-//				*((float*)ret_words + 9) = fliter_result_data.q[2];
-//				*((float*)ret_words + 13) = fliter_result_data.q[3];
-//				ret_words[17] = '@';
-//				
-//				for(int i = 0; i < 18; i++){
-//					usart1_send_char(ret_words[i]);
-//				}
-				
-				#endif
-				#ifdef TEST_MPU_FOR_UP
-				for(int i = 0; i < 29; i++){
+			}else if('D' == rev_buf[0]){
+				int i = 0;
+				for(i = 0; i < 32; i++){
 					usart1_send_char(rev_buf[i]);
 				}
-				#endif
+				
+//				memset(&temp_frame_data,0,sizeof(temp_frame_data));
+//				char recev_adsolute_node_num = rev_buf[1];
+//				unsigned int frame_count = *((unsigned int*)(rev_buf+2));
+//				temp_frame_data.acc_x = *((short *)(rev_buf+6));
+//				temp_frame_data.acc_y = *((short *)(rev_buf+8));
+//				temp_frame_data.acc_z = *((short *)(rev_buf+10));
+//				temp_frame_data.gyr_x = *((short *)(rev_buf+12));
+//				temp_frame_data.gyr_y = *((short *)(rev_buf+14));
+//				temp_frame_data.gyr_z = *((short *)(rev_buf+16));
+//				temp_frame_data.mag_x = *((short *)(rev_buf+18));
+//				temp_frame_data.mag_y = *((short *)(rev_buf+20));
+//				temp_frame_data.mag_z = *((short *)(rev_buf+22));
+//				
+//				temp_frame_data.q0 = *((short *)(rev_buf+24));
+//				temp_frame_data.q1 = *((short *)(rev_buf+26));
+//				temp_frame_data.q2 = *((short *)(rev_buf+28));
+//				temp_frame_data.q3 = *((short *)(rev_buf+30));
+//				
+//				sprintf(ret_words,"ID:%d,ax:%d,ay:%d,az:%d,gx:%d,gy:%d,gz:%d,mx:%d,my:%d,mz:%d,q0:%d,q1:%d,q2:%d,q3:%d\r\n",recev_adsolute_node_num
+//						,temp_frame_data.acc_x,temp_frame_data.acc_y,temp_frame_data.acc_z
+//						,temp_frame_data.gyr_x,temp_frame_data.gyr_y,temp_frame_data.gyr_z
+//						,temp_frame_data.mag_x,temp_frame_data.mag_y,temp_frame_data.mag_z
+//						,temp_frame_data.q0,temp_frame_data.q1,temp_frame_data.q2,temp_frame_data.q3);
+//				Uart1_SendString((u8*)ret_words);
+//				#ifdef TEST_MPU9250
+//				sprintf(ret_words,"ax : %f, ay : %f, az : %f, gx : %f, gy : %f, gz : %f, mx : %f, my : %f, mz : %f\r\n",mpu9250_data.ax,mpu9250_data.ay,mpu9250_data.az
+//				,mpu9250_data.gx,mpu9250_data.gy,mpu9250_data.gz,mpu9250_data.mx,mpu9250_data.my,mpu9250_data.mz);
+//				Uart1_SendString((u8*)ret_words);
+//				#endif
+//				complementary_task(&fliter_data,&fliter_result_data,&mpu9250_data,dt);
+////				kalman_filter_main(dt,&mup9250_raw_data,&fliter_result_data);
+
+//				#ifdef TEST_MPU_NIMING  //四轴界面
+//				MPU9250_report_imu(&mup9250_raw_data,&fliter_result_data);  //匿名调试接口
+//				#endif
+//				
+//				#ifdef TEST_MPU_PLOT
+//				MPU9250_send_data(mup9250_raw_data.ax,mup9250_raw_data.ay,mup9250_raw_data.az,mup9250_raw_data.gx,mup9250_raw_data.gy,mup9250_raw_data.gz,mup9250_raw_data.mx,mup9250_raw_data.my,mup9250_raw_data.mz);
+//				#endif
+//				
+//				#ifdef TEST_MPU_FOR_UP_MORE_THEN_ONE_NODE
+//				sprintf(ret_words,"ID:%d,frame_count:%d,%f,%f,%f,%f\r\n",node_index_for_base_station,frame_count,fliter_result_data.q[0],fliter_result_data.q[1],fliter_result_data.q[2],fliter_result_data.q[3]);
+//				Uart1_SendString((u8*)ret_words);							//
+//				#endif
+//				
+//				#ifdef TEST_TEST_MPU_FOR_UP_ROOT_NODE
+//				sprintf(ret_words,"%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\r\n",fliter_result_data.q[0],fliter_result_data.q[1],fliter_result_data.q[2],fliter_result_data.q[3]
+//																	,mpu9250_data.ax,mpu9250_data.ay,mpu9250_data.az,mpu9250_data.gx,mpu9250_data.gy,mpu9250_data.gz);
+//				Uart1_SendString((u8*)ret_words);
+//				#endif
 			}
 		}else{
 				
